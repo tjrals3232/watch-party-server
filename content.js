@@ -452,9 +452,16 @@
       if (counter) counter.innerText = `접속 중: ${count}명`;
     });
 
-    socket.on("user_notification", (msg) => {
-      uiSystemMsg(msg);
-    });
+    // (Top frame) 시스템 알림 수신 (영상 제어, 입장/퇴장)
+socket.on('user_notification', (msg) => {
+  const msgBox = document.getElementById('tp-chat-messages');
+  if (!msgBox) return;
+  const div = document.createElement('div');
+  div.classList.add('system-msg');
+  div.innerText = msg;
+  msgBox.appendChild(div);
+  msgBox.scrollTop = msgBox.scrollHeight;
+});
 
     socket.on("receive_message", (data) => {
       uiReceiveChat(data);
