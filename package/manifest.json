@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "My Watch Party",
+  "version": "1.2",
+  "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["socket.io.min.js", "content.js"],
+      "all_frames": true
+    }
+  ]
+}
