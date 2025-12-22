@@ -14,6 +14,13 @@ const emitUserCount = (roomID) => {
     io.to(roomID).emit('update_user_count', count);
 };
 
+// 시간을 00:00 형식으로 변환하는 함수
+const formatTime = (seconds) => {
+    const min = Math.floor(seconds / 60);
+    const sec = Math.floor(seconds % 60);
+    return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+};
+
 io.on('connection', (socket) => {
     // [추가] 접속 로그
     console.log('접속:', socket.id);
@@ -30,7 +37,27 @@ io.on('connection', (socket) => {
     });
 
     socket.on('video_state', (data) => {
-        socket.to(data.roomID).emit('video_state', data);
+        const user = users[socket.id];
+        if (user) {
+            let actionText = "";
+            const timeStr = formatTime(data.time);
+
+            // 상태에 따른 알림 문구 작성
+            if (data.type === 'play') {
+                actionText = `${user.nickname}님이 영상을 재생했습니다.`;
+            } else if (data.type === 'pause') {
+                actionText = `${user.nickname}님이 영상을 일시정지했습니다.`;
+            } else {
+                // seeking 등 시간 이동 시
+                actionText = `${user.nickname}님이 ${timeStr} 지점으로 이동했습니다.`;
+            }
+
+            // 1. 영상 상태는 '나를 제외한' 사람들에게 전달 (동기화용)
+            socket.to(data.roomID).emit('video_state', data);
+            
+            // 2. 알림 메시지는 '나를 포함한' 모든 사람에게 전달 (채팅창 출력용)
+            io.to(data.roomID).emit('user_notification', actionText);
+        }
     });
 
     socket.on('send_message', (data) => {

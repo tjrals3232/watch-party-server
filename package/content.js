@@ -1,23 +1,16 @@
 // content.js
-//const socket = io("http://localhost:3000");
 const socket = io("https://watch-party-server-hv8v.onrender.com");
 let isRemoteAction = false;
 let currentRoom = null;
 let myNickname = "";
 
-// [추가] UI는 오직 최상위 페이지(Top)에서만 생성합니다.
-if (window.self === window.top) {
-    document.body.insertAdjacentHTML('beforeend', chatHTML);
-    document.head.appendChild(style);
-
-// 1. UI 구조 및 스타일
+// 1. UI 구조 및 스타일 정의 (최상단으로 이동)
 const chatHTML = `
     <div id="tp-chat-container">
         <div id="tp-chat-header">Watch Party</div>
         <div id="tp-user-counter" style="background:#222; font-size:10px; padding:4px 10px; color:#00ff00; border-bottom:1px solid #333;">
             접속 중: 1명
         </div>
-        
         <div id="tp-setup-view">
             <input type="text" id="tp-nick-input" placeholder="닉네임 입력">
             <input type="text" id="tp-room-input" placeholder="방 번호 입력">
@@ -26,7 +19,6 @@ const chatHTML = `
                 <button id="tp-btn-random">방 만들기</button>
             </div>
         </div>
-
         <div id="tp-active-view" style="display:none; flex:1; flex-direction:column; overflow:hidden;">
             <div id="tp-room-info" style="font-size:11px; padding:5px; background:#444;"></div>
             <div id="tp-chat-messages"></div>
@@ -63,59 +55,8 @@ style.innerHTML = `
     .system-msg { text-align: center; font-size: 11px; color: #999; margin: 8px 0; font-style: italic; }
 `;
 
-document.body.insertAdjacentHTML('beforeend', chatHTML);
-document.head.appendChild(style);
-
-// 2. 드래그 로직
-const chatContainer = document.getElementById('tp-chat-container');
-const chatHeader = document.getElementById('tp-chat-header');
-let isDragging = false, offsetX, offsetY;
-chatHeader.onmousedown = (e) => {
-    isDragging = true;
-    offsetX = e.clientX - chatContainer.getBoundingClientRect().left;
-    offsetY = e.clientY - chatContainer.getBoundingClientRect().top;
-};
-document.onmousemove = (e) => {
-    if (!isDragging) return;
-    chatContainer.style.left = (e.clientX - offsetX) + 'px';
-    chatContainer.style.top = (e.clientY - offsetY) + 'px';
-    chatContainer.style.right = 'auto';
-};
-document.onmouseup = () => isDragging = false;
-
-// 입장 버튼 클릭 시 storage에 저장
-    const originalJoinRoom = joinRoom;
-    joinRoom = (room, nick) => {
-        chrome.storage.local.set({ tpRoom: room, tpNick: nick }); // 저장소에 기록
-        originalJoinRoom(room, nick);
-    };
-}
-
-// [핵심] 저장소의 변화를 감지하여 모든 프레임(iframe 포함)이 자동으로 방에 입장하게 함
-chrome.storage.onChanged.addListener((changes) => {
-    if (changes.tpRoom || changes.tpNick) {
-        chrome.storage.local.get(['tpRoom', 'tpNick'], (res) => {
-            if (res.tpRoom && res.tpNick) {
-                autoJoin(res.tpRoom, res.tpNick);
-            }
-        });
-    }
-});
-
-// 자동 입장 함수
-function autoJoin(room, nick) {
-    currentRoom = room;
-    myNickname = nick;
-    socket.emit('join_room', { roomID: room, nickname: nick });
-    console.log(`[Frame] 자동으로 방(${room})에 입장했습니다.`);
-}
-
-// 3. 방 관리 및 소켓 리스너
-const setupView = document.getElementById('tp-setup-view');
-const activeView = document.getElementById('tp-active-view');
-const msgBox = document.getElementById('tp-chat-messages');
-
-const joinRoom = (room, nick) => {
+// 2. 핵심 로직 함수 정의
+const performJoinRoom = (room, nick) => {
     if (!room || !nick) return alert("닉네임과 방 번호를 입력하세요!");
     currentRoom = room;
     myNickname = nick;
@@ -125,10 +66,13 @@ const joinRoom = (room, nick) => {
     socket.off('user_notification');
 
     socket.on('update_user_count', (count) => {
-        document.getElementById('tp-user-counter').innerText = `접속 중: ${count}명`;
+        const counter = document.getElementById('tp-user-counter');
+        if (counter) counter.innerText = `접속 중: ${count}명`;
     });
 
     socket.on('receive_message', (data) => {
+        const msgBox = document.getElementById('tp-chat-messages');
+        if (!msgBox) return;
         const isMine = data.senderId === socket.id;
         const msgDiv = document.createElement('div');
         msgDiv.classList.add('chat-msg');
@@ -146,6 +90,8 @@ const joinRoom = (room, nick) => {
     });
 
     socket.on('user_notification', (msg) => {
+        const msgBox = document.getElementById('tp-chat-messages');
+        if (!msgBox) return;
         const div = document.createElement('div');
         div.classList.add('system-msg');
         div.innerText = msg;
@@ -155,94 +101,113 @@ const joinRoom = (room, nick) => {
 
     socket.emit('join_room', { roomID: currentRoom, nickname: myNickname });
     
-    setupView.style.display = 'none';
-    activeView.style.display = 'flex';
-    document.getElementById('tp-room-info').innerText = `방: ${currentRoom} | 닉네임: ${myNickname}`;
-};
-
-document.getElementById('tp-btn-random').onclick = () => {
-    document.getElementById('tp-room-input').value = Math.random().toString(36).substring(2, 8).toUpperCase();
-};
-document.getElementById('tp-btn-join').onclick = () => {
-    joinRoom(document.getElementById('tp-room-input').value, document.getElementById('tp-nick-input').value);
-};
-
-// 4. 비디오 제어 (동적 감지 로직)
-// content.js 내 비디오 제어 부분 교체
-function initVideoControl() {
-
+    const setupView = document.getElementById('tp-setup-view');
+    const activeView = document.getElementById('tp-active-view');
+    const roomInfo = document.getElementById('tp-room-info');
     
-    // 1. 모든 프레임과 Shadow DOM에서 비디오를 찾는 함수
-    function findVideo() {
-    // 페이지 내의 모든 비디오 중 가장 면적이 넓은 것(본 영상일 확률 높음)을 선택
-    const videos = Array.from(document.querySelectorAll('video'));
-    if (videos.length === 0) return null;
-    return videos.reduce((prev, curr) => 
-        (prev.offsetWidth * prev.offsetHeight > curr.offsetWidth * curr.offsetHeight) ? prev : curr
-    );
+    if (setupView) setupView.style.display = 'none';
+    if (activeView) activeView.style.display = 'flex';
+    if (roomInfo) roomInfo.innerText = `방: ${currentRoom} | 닉네임: ${myNickname}`;
+};
+
+function autoJoin(room, nick) {
+    currentRoom = room;
+    myNickname = nick;
+    socket.emit('join_room', { roomID: room, nickname: nick });
+    console.log(`[Frame] 자동으로 방(${room})에 입장했습니다.`);
 }
 
+// 3. UI 생성 및 이벤트 바인딩 (Top Window 전용)
+if (window.self === window.top) {
+    document.body.insertAdjacentHTML('beforeend', chatHTML);
+    document.head.appendChild(style);
+
+    // 드래그 로직
+    const chatContainer = document.getElementById('tp-chat-container');
+    const chatHeader = document.getElementById('tp-chat-header');
+    let isDragging = false, offsetX, offsetY;
+
+    chatHeader.onmousedown = (e) => {
+        isDragging = true;
+        offsetX = e.clientX - chatContainer.getBoundingClientRect().left;
+        offsetY = e.clientY - chatContainer.getBoundingClientRect().top;
+    };
+    document.onmousemove = (e) => {
+        if (!isDragging) return;
+        chatContainer.style.left = (e.clientX - offsetX) + 'px';
+        chatContainer.style.top = (e.clientY - offsetY) + 'px';
+        chatContainer.style.right = 'auto';
+    };
+    document.onmouseup = () => isDragging = false;
+
+    // 입장 버튼 클릭 핸들러
+    document.getElementById('tp-btn-join').onclick = () => {
+        const room = document.getElementById('tp-room-input').value;
+        const nick = document.getElementById('tp-nick-input').value;
+        chrome.storage.local.set({ tpRoom: room, tpNick: nick });
+        performJoinRoom(room, nick);
+    };
+
+    document.getElementById('tp-btn-random').onclick = () => {
+        document.getElementById('tp-room-input').value = Math.random().toString(36).substring(2, 8).toUpperCase();
+    };
+
+    // 메시지 전송 로직
+    const input = document.getElementById('tp-chat-input');
+    const sendBtn = document.getElementById('tp-chat-send');
+
+    const sendMessage = () => {
+        const text = input.value.trim();
+        if (text && currentRoom) {
+            socket.emit('send_message', { 
+                text: text, 
+                roomID: currentRoom, 
+                nickname: myNickname, 
+                senderId: socket.id 
+            });
+            input.value = '';
+        }
+    };
+    sendBtn.onclick = sendMessage;
+    input.onkeypress = (e) => { if (e.key === 'Enter') sendMessage(); };
+}
+
+// 4. 공통 리스너 (모든 프레임)
+chrome.storage.onChanged.addListener((changes) => {
+    if (changes.tpRoom || changes.tpNick) {
+        chrome.storage.local.get(['tpRoom', 'tpNick'], (res) => {
+            if (res.tpRoom && res.tpNick) autoJoin(res.tpRoom, res.tpNick);
+        });
+    }
+});
+
+function initVideoControl() {
     const video = document.querySelector('video');
     if (!video) {
         setTimeout(initVideoControl, 1000);
         return;
     }
-
     console.log("동기화 대상 영상을 찾았습니다!");
 
-    // 2. 상태 감시 변수 (이벤트가 안 먹힐 때를 대비)
     let lastTime = video.currentTime;
     let lastPaused = video.paused;
 
-    // 0.5초마다 영상 상태를 체크하여 변화가 있으면 서버로 전송
     setInterval(() => {
         if (isRemoteAction || !currentRoom) return;
-
-        // 일시정지/재생 상태가 변했거나, 시간이 크게 점프(Seeking)했을 때
         if (video.paused !== lastPaused || Math.abs(video.currentTime - lastTime) > 1.5) {
             const state = video.paused ? 'pause' : 'play';
-            socket.emit('video_state', { 
-                type: state, 
-                time: video.currentTime, 
-                roomID: currentRoom 
-            });
-            console.log("상태 변화 감지 및 전송:", state, video.currentTime);
+            socket.emit('video_state', { type: state, time: video.currentTime, roomID: currentRoom });
         }
-        
         lastTime = video.currentTime;
         lastPaused = video.paused;
     }, 500);
 
-    // 3. 서버 신호 수신 로직 (기존과 동일)
     socket.on('video_state', (data) => {
         isRemoteAction = true;
         if (data.type === 'play') video.play();
         else if (data.type === 'pause') video.pause();
-        
-        if (Math.abs(video.currentTime - data.time) > 1.0) {
-            video.currentTime = data.time;
-        }
-        setTimeout(() => { isRemoteAction = false; }, 200);
+        if (Math.abs(video.currentTime - data.time) > 1.0) video.currentTime = data.time;
+        setTimeout(() => { isRemoteAction = false; }, 500);
     });
 }
-initVideoControl(); 
-
-// 5. 메시지 전송 로직
-const input = document.getElementById('tp-chat-input');
-const sendBtn = document.getElementById('tp-chat-send');
-
-const sendMessage = () => {
-    const text = input.value.trim();
-    if (text && currentRoom) {
-        socket.emit('send_message', { 
-            text: text, 
-            roomID: currentRoom, 
-            nickname: myNickname, 
-            senderId: socket.id 
-        });
-        input.value = '';
-    }
-};
-
-sendBtn.onclick = sendMessage;
-input.onkeypress = (e) => { if (e.key === 'Enter') sendMessage(); };
+initVideoControl();
