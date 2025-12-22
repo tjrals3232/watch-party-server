@@ -1,9 +1,14 @@
 // content.js
 //const socket = io("http://localhost:3000");
-const socket = io("https://featureless-vanetta-overhurriedly.ngrok-free.dev");
+const socket = io("https://watch-party-server-hv8v.onrender.com");
 let isRemoteAction = false;
 let currentRoom = null;
 let myNickname = "";
+
+// [추가] UI는 오직 최상위 페이지(Top)에서만 생성합니다.
+if (window.self === window.top) {
+    document.body.insertAdjacentHTML('beforeend', chatHTML);
+    document.head.appendChild(style);
 
 // 1. UI 구조 및 스타일
 const chatHTML = `
@@ -78,6 +83,33 @@ document.onmousemove = (e) => {
 };
 document.onmouseup = () => isDragging = false;
 
+// 입장 버튼 클릭 시 storage에 저장
+    const originalJoinRoom = joinRoom;
+    joinRoom = (room, nick) => {
+        chrome.storage.local.set({ tpRoom: room, tpNick: nick }); // 저장소에 기록
+        originalJoinRoom(room, nick);
+    };
+}
+
+// [핵심] 저장소의 변화를 감지하여 모든 프레임(iframe 포함)이 자동으로 방에 입장하게 함
+chrome.storage.onChanged.addListener((changes) => {
+    if (changes.tpRoom || changes.tpNick) {
+        chrome.storage.local.get(['tpRoom', 'tpNick'], (res) => {
+            if (res.tpRoom && res.tpNick) {
+                autoJoin(res.tpRoom, res.tpNick);
+            }
+        });
+    }
+});
+
+// 자동 입장 함수
+function autoJoin(room, nick) {
+    currentRoom = room;
+    myNickname = nick;
+    socket.emit('join_room', { roomID: room, nickname: nick });
+    console.log(`[Frame] 자동으로 방(${room})에 입장했습니다.`);
+}
+
 // 3. 방 관리 및 소켓 리스너
 const setupView = document.getElementById('tp-setup-view');
 const activeView = document.getElementById('tp-active-view');
@@ -138,13 +170,19 @@ document.getElementById('tp-btn-join').onclick = () => {
 // 4. 비디오 제어 (동적 감지 로직)
 // content.js 내 비디오 제어 부분 교체
 function initVideoControl() {
+
+    
     // 1. 모든 프레임과 Shadow DOM에서 비디오를 찾는 함수
     function findVideo() {
-        return document.querySelector('video'); // 우선 기본 탐색
-    }
+    // 페이지 내의 모든 비디오 중 가장 면적이 넓은 것(본 영상일 확률 높음)을 선택
+    const videos = Array.from(document.querySelectorAll('video'));
+    if (videos.length === 0) return null;
+    return videos.reduce((prev, curr) => 
+        (prev.offsetWidth * prev.offsetHeight > curr.offsetWidth * curr.offsetHeight) ? prev : curr
+    );
+}
 
-    const video = findVideo();
-    
+    const video = document.querySelector('video');
     if (!video) {
         setTimeout(initVideoControl, 1000);
         return;
