@@ -26,16 +26,21 @@ io.on('connection', (socket) => {
     console.log('접속:', socket.id);
 
     socket.on('join_room', (data) => {
-        // [Fix] 중복 입장 방지 (클라이언트 race condition 등으로 인한 중복 로그 방지)
+        // [Fix] 중복 입장 방지
         const prev = users[socket.id];
-        if (prev && prev.roomID === data.roomID && prev.nickname === data.nickname) {
-            return;
+        if (prev) {
+            if (prev.roomID === data.roomID && prev.nickname === data.nickname) {
+                return; // 완전히 동일하면 무시
+            }
+            // 방을 바꾸거나 닉네임을 바꾼 경우 -> 이전 방 퇴장 처리
+            socket.leave(prev.roomID);
+            io.to(prev.roomID).emit('user_notification', `${prev.nickname}님이 이동하셨습니다.`);
+            emitUserCount(prev.roomID);
         }
 
         socket.join(data.roomID);
         users[socket.id] = { roomID: data.roomID, nickname: data.nickname };
 
-        // [추가] 입장 로그
         console.log(`[${data.roomID}] ${data.nickname} 입장`);
 
         io.to(data.roomID).emit('user_notification', `${data.nickname}님이 입장하셨습니다.`);

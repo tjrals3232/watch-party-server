@@ -293,6 +293,7 @@
   const styleContent = `
     #tp-chat-container {
       position: fixed; top: 100px; right: 20px; width: 320px; height: 420px;
+      resize: both; min-width: 280px; min-height: 300px;
       background: rgba(33, 33, 33, 0.95); color: white; z-index: 2147483647;
       display: flex; flex-direction: column; border-radius: 12px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.5); font-family: sans-serif; overflow: hidden;
@@ -301,11 +302,11 @@
     #tp-setup-view { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
     #tp-setup-view input { background: #444; border: none; color: white; padding: 10px; border-radius: 6px; outline:none; }
     #tp-setup-view button { background: #ff0000; border: none; color: white; padding: 10px; border-radius: 6px; cursor: pointer; flex: 1; }
-    #tp-chat-messages { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-    .chat-msg { background: rgba(255,255,255,0.1); padding: 8px; border-radius: 8px; font-size: 13px; max-width: 85%; display: flex; flex-direction: column; }
-    .msg-user { font-weight: bold; font-size: 11px; color: #aaa; margin-bottom: 2px; }
+    #tp-chat-messages { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 4px; }
+    .chat-msg { background: rgba(255,255,255,0.1); padding: 5px 8px; border-radius: 8px; font-size: 13px; max-width: 85%; display: flex; flex-direction: column; line-height: 1.2; }
+    .msg-user { font-weight: bold; font-size: 10px; color: #aaa; margin-bottom: 0; }
     .chat-msg.mine { align-self: flex-end; background: #065fd4; }
-    .msg-time { font-size: 9px; color: #777; margin-top: 2px; align-self: flex-end; }
+    .msg-time { font-size: 9px; color: #777; margin-top: 0; align-self: flex-end; }
     .mine .msg-time { align-self: flex-start; }
     #tp-chat-input-area { display: flex; padding: 10px; gap: 5px; background: #1a1a1a; }
     #tp-chat-input { flex: 1; background: #333; border: none; color: white; padding: 8px; border-radius: 6px; outline: none; }
